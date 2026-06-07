@@ -1,0 +1,183 @@
+#include <Bluepad32.h>
+
+#define DAC1 25
+#define DAC2 26
+#define AS1 14
+#define AS2 13
+
+#define MIN_DUTY 10
+#define MAX_DUTY 90
+
+ControllerPtr controllers[BP32_MAX_GAMEPADS];
+
+const uint8_t centerV = 198;
+const uint8_t v1 = 234;
+const uint8_t v2 = 148;
+
+uint8_t t1 = 198;
+uint8_t t2 = 198;
+
+volatile uint32_t riseTime1 = 0;
+volatile uint32_t highTime1 = 0;
+volatile uint32_t lowTime1 = 0;
+volatile uint32_t lastFallTime1 = 0;
+volatile bool newData1 = false;
+
+volatile uint32_t riseTime2 = 0;
+volatile uint32_t highTime2 = 0;
+volatile uint32_t lowTime2 = 0;
+volatile uint32_t lastFallTime2 = 0;
+volatile bool newData2 = false;
+
+float angle1 = 0;
+float angle2 = 0;
+float avgAngle = 0;
+
+void onConnect(ControllerPtr ctl) {
+  bool foundEmptySlot = false;
+  for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+    if (controllers[i] == nullptr) {
+      Serial.printf("CALLBACK: Controller connected, index=%d\n", i);
+      ControllerProperties properties = ctl->getProperties();
+      Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,
+                           properties.product_id);
+      controllers[i] = ctl;
+      foundEmptySlot = true;
+      break;
+    }
+  }
+}
+
+void onDisconnect(ControllerPtr ctl) {
+  bool foundController = false;
+
+  for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+    if (controllers[i] == nullptr) {
+      Serial.printf("CALLBACK: Controller disconnected, index=%d\n", i);
+      controllers[i] = nullptr;
+      foundController = true;
+      break;
+    }
+  }
+
+  if (!foundController) {
+    Serial.println("CALLBACK: Controller disconnected, but not found in controller list");
+  }
+}
+
+void processGamepad(ControllerPtr ctl) {
+  int x = ctl->axisX();
+
+  if (abs(x) < 5) {
+    t1 = centerV;
+    t2 = centerV;
+  }
+
+  t1 = map(x, -512, 512, v1, v2);
+  t2 = map(x, -512, 512, v2, v1);
+
+  printData(ctl);
+}
+
+void printData(ControllerPtr ctl) {
+  Serial.printf("axis L: %4d, T1: %u, T2: %u\n",
+                ctl->axisX(), t1, t2);
+}
+
+void processController() {
+  for (auto controller : controllers) {
+    if (controller && controller->isConnected() && controller->hasData()) {
+      if (controller->isGamepad())
+        processGamepad(controller);
+    }
+  }
+}
+
+void IRAM_ATTR isr1() {
+  uint32_t now = micros();
+  
+  if (digitalRead(AS1)) {
+    lowTime1 = now - lastFallTime1;
+    riseTime1 = now;
+  } else {
+    highTime1 = now - riseTime1;
+    lastFallTime1 = now;
+    newData1 = true;
+  }
+}
+
+void IRAM_ATTR isr2() {
+  uint32_t now = micros();
+
+  if (digitalRead(AS2)) {
+    lowTime2 = now - lastFallTime2;
+    riseTime2 = now;
+  } else {
+    highTime2 = now - riseTime2;
+    lastFallTime2 = now;
+    newData2 = true;
+  }
+}
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+
+  pinMode(AS1, INPUT);
+  pinMode(AS2, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(AS1), isr1, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(AS2), isr2, CHANGE);
+
+  BP32.setup(&onConnect, &onDisconnect);
+
+  BP32.forgetBluetoothKeys();
+
+  BP32.enableVirtualDevice(false);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  if (newData1) {
+    noInterrupts();
+    uint32_t high = highTime1;
+    uint32_t low = lowTime1;
+    newData1 = false;
+    interrupts();
+
+    float duty = ((float)high / (high + low)) * 100.0;
+    float freq = 1000000.0 / (high + low);
+
+    Serial.print("AS1: ");
+    Serial.print(duty);
+    Serial.print("% ");
+    Serial.print(freq);
+    Serial.println(" Hz");
+  }
+
+  if (newData2) {
+    noInterrupts();
+    uint32_t high = highTime2;
+    uint32_t low = lowTime2;
+    newData2 = false;
+    interrupts();
+
+    float duty = ((float)high / (high + low)) * 100.0;
+    float freq = 1000000.0 / (high + low);
+
+    Serial.print("AS2: ");
+    Serial.print(duty);
+    Serial.print("% ");
+    Serial.print(freq);
+    Serial.println(" Hz");
+  }
+
+  bool dataUpdated = BP32.update();
+  if (dataUpdated)
+    processController();
+
+  dacWrite(DAC1, t1);
+  dacWrite(DAC2, t2);
+
+  delay(150);
+}
