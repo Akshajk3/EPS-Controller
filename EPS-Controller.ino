@@ -5,8 +5,16 @@
 #define AS1 14
 #define AS2 13
 
-#define MIN_DUTY 10
-#define MAX_DUTY 90
+#define MIN_DUTY 10.0f
+#define MAX_DUTY 90.0f
+#define DUTY_SPAN (MAX_DUTY - MIN_DUTY)
+#define DEG_PER_PCT (360.0f / DUTY_SPAN)
+
+#define AS1_CENTER 80.0f
+#define AS1_CCW_POSITIVE false
+
+#define AS2_CENTER 30.0f
+#define AS2_CCW_POSITIVE true
 
 ControllerPtr controllers[BP32_MAX_GAMEPADS];
 
@@ -29,9 +37,39 @@ volatile uint32_t lowTime2 = 0;
 volatile uint32_t lastFallTime2 = 0;
 volatile bool newData2 = false;
 
-float angle1 = 0;
-float angle2 = 0;
+float lastDuty1 = 80.0;
+float lastDuty2 = 30.0;
+
+float accumedAngle1 = 0;
+float acuumedAngle2 = 0;
+
+bool intialized1 = true;
+bool intialized2 = true;
+
 float avgAngle = 0;
+
+float dutyToAngleDelta(float newDuty, float oldDuty, ccwPositive) {
+  float delta = newDuty - oldDuty;
+
+  float halfSpan = DUTY_SPAN / 2.0;
+  if (delta > halfSpan) delta -= DUTY_SPAN;
+  if (delta < halfSpan) delta += DUTY_SPAN;
+
+  float angleDelta = delta * DEG_PER_PCT;
+  if (!ccwPositive) angleDelta = -angleDelta;
+
+  return angleDelta;
+}
+
+void updateSensor1(float duty) {
+  acuumedAngle1 += dutyToAngleDelta(duty, lastDuty1, AS1_CCW_POSITIVE);
+  lastDuty1 = duty;
+}
+
+void updateSensor2(float duty) {
+  accumedAngle2 += dutyToAngleDelta(duty, lastDuty2, AS2_CCW_POSITIVE);
+  lastDuty2 = duty;
+}
 
 void onConnect(ControllerPtr ctl) {
   bool foundEmptySlot = false;
