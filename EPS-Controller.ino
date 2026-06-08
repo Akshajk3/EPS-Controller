@@ -22,12 +22,8 @@
 #define KD 0.0f
 
 #define TARGET_ANGLE 45.0f
-
-#define MAX_INPUT 40.0f
-
-#define ANGLE_DEADBAND
-
-ControllerPtr controllers[BP32_MAX_GAMEPADS];
+#define MAX_OUTPUT 40.0f
+#define ANGLE_DEADBAND 1.0f
 
 const uint8_t centerV = 198;
 const uint8_t v1 = 234;
@@ -59,6 +55,14 @@ bool intialized2 = true;
 
 float avgAngle = 0;
 
+double pidSetpoint = TARGET_ANGLE;
+double pidInput = 0;
+double pidOutput = 0;
+
+PID steeringPID(&pidInput, &pidOutput, &pidSetpoint, KP, KI, KD, DIRECT);
+
+ControllerPtr controllers[BP32_MAX_GAMEPADS];
+
 float dutyToAngleDelta(float newDuty, float oldDuty, bool ccwPositive) {
   float delta = newDuty - oldDuty;
 
@@ -80,6 +84,16 @@ void updateSensor1(float duty) {
 void updateSensor2(float duty) {
   accumedAngle2 += dutyToAngleDelta(duty, lastDuty2, AS2_CCW_POSITIVE);
   lastDuty2 = duty;
+}
+
+void applyTorque(double output) {
+  if (abs(pidInput - pidSetpoint) < ANGLE_DEADBAND) {
+    t1 = centerV;
+    t2 = centerV;
+    return;
+  }
+  t1 = constrain((int)centerV - (int)output, v2, v1);
+  t2 = constrain((int)centerV + (int)output, v2, v1);
 }
 
 void onConnect(ControllerPtr ctl) {
@@ -125,7 +139,7 @@ void processGamepad(ControllerPtr ctl) {
   t1 = map(x, -512, 512, v1, v2);
   t2 = map(x, -512, 512, v2, v1);
 
-  printData(ctl);
+  // printData(ctl);
 }
 
 void printData(ControllerPtr ctl) {
@@ -183,6 +197,10 @@ void setup() {
   BP32.forgetBluetoothKeys();
 
   BP32.enableVirtualDevice(false);
+
+  steeringPID.SetOutputLimits(-MAX_OUTPUT, MAX_OUTPUT);
+  steeringPID.SetSampleTime(150);
+  steeringPID.SetMode(AUTOMATIC);
 }
 
 void loop() {
@@ -229,6 +247,14 @@ void loop() {
     avgAngle = (accumedAngle1 + accumedAngle2) / 2.0f;
     Serial.printf("Steering angle: %.1f deg\n", avgAngle);
   }
+
+  steeringPID.Compute();
+  applyTorque(pidOutput);
+
+  Serial.printf("Target: %.1f  Current: %.1f  Output: %.1f  T1: %u  T2: %u\n",
+                pidSetpoint, pidInput, pidOutput, t1, t2);
+
+  BP32.update();
 
   bool dataUpdated = BP32.update();
   if (dataUpdated)
