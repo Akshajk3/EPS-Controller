@@ -1,20 +1,31 @@
 #include <Bluepad32.h>
+#include <PID_v1.h>
 
 #define DAC1 25
 #define DAC2 26
-#define AS1 14
-#define AS2 13
+#define AS1 14 // White Wire (TOP PIN)
+#define AS2 13 // Red Wire (Bottom Pin)
 
 #define MIN_DUTY 10.0f
 #define MAX_DUTY 90.0f
 #define DUTY_SPAN (MAX_DUTY - MIN_DUTY)
-#define DEG_PER_PCT (360.0f / DUTY_SPAN)
+#define DEG_PER_PCT (180.0f / DUTY_SPAN)
 
 #define AS1_CENTER 80.0f
 #define AS1_CCW_POSITIVE false
 
 #define AS2_CENTER 30.0f
 #define AS2_CCW_POSITIVE true
+
+#define KP 1.0f
+#define KI 0.0f
+#define KD 0.0f
+
+#define TARGET_ANGLE 45.0f
+
+#define MAX_INPUT 40.0f
+
+#define ANGLE_DEADBAND
 
 ControllerPtr controllers[BP32_MAX_GAMEPADS];
 
@@ -41,19 +52,19 @@ float lastDuty1 = 80.0;
 float lastDuty2 = 30.0;
 
 float accumedAngle1 = 0;
-float acuumedAngle2 = 0;
+float accumedAngle2 = 0;
 
 bool intialized1 = true;
 bool intialized2 = true;
 
 float avgAngle = 0;
 
-float dutyToAngleDelta(float newDuty, float oldDuty, ccwPositive) {
+float dutyToAngleDelta(float newDuty, float oldDuty, bool ccwPositive) {
   float delta = newDuty - oldDuty;
 
   float halfSpan = DUTY_SPAN / 2.0;
   if (delta > halfSpan) delta -= DUTY_SPAN;
-  if (delta < halfSpan) delta += DUTY_SPAN;
+  if (delta < -halfSpan) delta += DUTY_SPAN;
 
   float angleDelta = delta * DEG_PER_PCT;
   if (!ccwPositive) angleDelta = -angleDelta;
@@ -62,7 +73,7 @@ float dutyToAngleDelta(float newDuty, float oldDuty, ccwPositive) {
 }
 
 void updateSensor1(float duty) {
-  acuumedAngle1 += dutyToAngleDelta(duty, lastDuty1, AS1_CCW_POSITIVE);
+  accumedAngle1 += dutyToAngleDelta(duty, lastDuty1, AS1_CCW_POSITIVE);
   lastDuty1 = duty;
 }
 
@@ -183,14 +194,16 @@ void loop() {
     newData1 = false;
     interrupts();
 
-    float duty = ((float)high / (high + low)) * 100.0;
-    float freq = 1000000.0 / (high + low);
+    float duty1 = ((float)high / (high + low)) * 100.0;
+    float freq1 = 1000000.0 / (high + low);
 
-    Serial.print("AS1: ");
-    Serial.print(duty);
-    Serial.print("% ");
-    Serial.print(freq);
-    Serial.println(" Hz");
+    updateSensor1(duty1);
+
+    // Serial.print("AS1: ");
+    // Serial.print(duty1);
+    // Serial.print("% ");
+    // Serial.print(freq1);
+    // Serial.println(" Hz");
   }
 
   if (newData2) {
@@ -200,14 +213,21 @@ void loop() {
     newData2 = false;
     interrupts();
 
-    float duty = ((float)high / (high + low)) * 100.0;
-    float freq = 1000000.0 / (high + low);
+    float duty2 = ((float)high / (high + low)) * 100.0;
+    float freq2 = 1000000.0 / (high + low);
 
-    Serial.print("AS2: ");
-    Serial.print(duty);
-    Serial.print("% ");
-    Serial.print(freq);
-    Serial.println(" Hz");
+    updateSensor2(duty2);
+
+    // Serial.print("AS2: ");
+    // Serial.print(duty2);
+    // Serial.print("% ");
+    // Serial.print(freq2);
+    // Serial.println(" Hz");
+  }
+
+  if (intialized1 && intialized2) {
+    avgAngle = (accumedAngle1 + accumedAngle2) / 2.0f;
+    Serial.printf("Steering angle: %.1f deg\n", avgAngle);
   }
 
   bool dataUpdated = BP32.update();
