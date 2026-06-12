@@ -17,13 +17,15 @@
 #define AS2_CENTER 30.0f
 #define AS2_CCW_POSITIVE true
 
-#define KP 1.0f
+#define KP 1.25f
 #define KI 0.0f
-#define KD 0.0f
+#define KD 0.2f
 
 #define TARGET_ANGLE 45.0f
 #define MAX_OUTPUT 40.0f
 #define ANGLE_DEADBAND 1.0f
+
+#define MIN_MOTOR_OUTPUT 20.0f
 
 const uint8_t centerV = 198;
 const uint8_t v1 = 234;
@@ -92,6 +94,10 @@ void applyTorque(double output) {
     t2 = centerV;
     return;
   }
+
+  if (output > 0 && output < MIN_MOTOR_OUTPUT) output = MIN_MOTOR_OUTPUT;
+  if (output < 0 && output < -MIN_MOTOR_OUTPUT) output = -MIN_MOTOR_OUTPUT;
+
   t1 = constrain((int)centerV - (int)output, v2, v1);
   t2 = constrain((int)centerV + (int)output, v2, v1);
 }
@@ -199,7 +205,7 @@ void setup() {
   BP32.enableVirtualDevice(false);
 
   steeringPID.SetOutputLimits(-MAX_OUTPUT, MAX_OUTPUT);
-  steeringPID.SetSampleTime(150);
+  steeringPID.SetSampleTime(20);
   steeringPID.SetMode(AUTOMATIC);
 }
 
@@ -215,7 +221,8 @@ void loop() {
     float duty1 = ((float)high / (high + low)) * 100.0;
     float freq1 = 1000000.0 / (high + low);
 
-    updateSensor1(duty1);
+    if (duty1 >= MIN_DUTY && duty1 <= MAX_DUTY)
+      updateSensor1(duty1);
 
     // Serial.print("AS1: ");
     // Serial.print(duty1);
@@ -234,7 +241,8 @@ void loop() {
     float duty2 = ((float)high / (high + low)) * 100.0;
     float freq2 = 1000000.0 / (high + low);
 
-    updateSensor2(duty2);
+    if (duty2 >= MIN_DUTY && duty2 <= MAX_DUTY)
+      updateSensor2(duty2);
 
     // Serial.print("AS2: ");
     // Serial.print(duty2);
@@ -245,7 +253,8 @@ void loop() {
 
   if (intialized1 && intialized2) {
     avgAngle = (accumedAngle1 + accumedAngle2) / 2.0f;
-    Serial.printf("Steering angle: %.1f deg\n", avgAngle);
+    pidInput = avgAngle;
+    // Serial.printf("Steering angle: %.1f deg\n", avgAngle);
   }
 
   steeringPID.Compute();
@@ -254,8 +263,6 @@ void loop() {
   Serial.printf("Target: %.1f  Current: %.1f  Output: %.1f  T1: %u  T2: %u\n",
                 pidSetpoint, pidInput, pidOutput, t1, t2);
 
-  BP32.update();
-
   bool dataUpdated = BP32.update();
   if (dataUpdated)
     processController();
@@ -263,5 +270,5 @@ void loop() {
   dacWrite(DAC1, t1);
   dacWrite(DAC2, t2);
 
-  delay(150);
+  delay(20);
 }
