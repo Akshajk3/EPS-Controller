@@ -19,13 +19,15 @@
 
 #define KP 1.25f
 #define KI 0.0f
-#define KD 0.2f
+#define KD 0.7f
 
-#define TARGET_ANGLE 45.0f
+#define TARGET_ANGLE 65.0f
 #define MAX_OUTPUT 40.0f
-#define ANGLE_DEADBAND 1.0f
+#define ANGLE_DEADBAND 15.0f
 
-#define MIN_MOTOR_OUTPUT 20.0f
+#define MIN_MOTOR_OUTPUT 15.0f
+
+#define HOLD_OUTPUT 10.0f
 
 const uint8_t centerV = 198;
 const uint8_t v1 = 234;
@@ -90,13 +92,21 @@ void updateSensor2(float duty) {
 
 void applyTorque(double output) {
   if (abs(pidInput - pidSetpoint) < ANGLE_DEADBAND) {
-    t1 = centerV;
-    t2 = centerV;
+    double holdOutput = (pidSetpoint > 0) ? HOLD_OUTPUT : -HOLD_OUTPUT;
+
+    if (abs(pidSetpoint) < 1.0) {
+      t1 = centerV;
+      t2 = centerV;
+      return;
+    }
+
+    t1 = constrain((int)centerV - (int)holdOutput, v2, v1);
+    t2 = constrain((int)centerV + (int)holdOutput, v2, v1);
     return;
   }
 
   if (output > 0 && output < MIN_MOTOR_OUTPUT) output = MIN_MOTOR_OUTPUT;
-  if (output < 0 && output < -MIN_MOTOR_OUTPUT) output = -MIN_MOTOR_OUTPUT;
+  if (output < 0 && output > -MIN_MOTOR_OUTPUT) output = -MIN_MOTOR_OUTPUT;
 
   t1 = constrain((int)centerV - (int)output, v2, v1);
   t2 = constrain((int)centerV + (int)output, v2, v1);
@@ -205,8 +215,13 @@ void setup() {
   BP32.enableVirtualDevice(false);
 
   steeringPID.SetOutputLimits(-MAX_OUTPUT, MAX_OUTPUT);
-  steeringPID.SetSampleTime(20);
+  steeringPID.SetSampleTime(150);
   steeringPID.SetMode(AUTOMATIC);
+
+  dacWrite(DAC1, t1);
+  dacWrite(DAC2, t2);
+
+  delay(10000);
 }
 
 void loop() {
@@ -270,5 +285,5 @@ void loop() {
   dacWrite(DAC1, t1);
   dacWrite(DAC2, t2);
 
-  delay(20);
+  delay(150);
 }
