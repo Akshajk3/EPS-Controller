@@ -116,22 +116,9 @@ All tuning values are `#define`s at the top of the sketch.
 
 The PID sample time is 150 ms (`SetSampleTime(150)`), matching the `delay(150)` at the end of `loop()`.
 
-### Tuning tips
+### Known Issues
 
-- Start with `KI = 0` and raise `KP` until the response is quick but not oscillating, then add `KD` to damp it.
-- If the actuator buzzes near the target, shrink `MIN_MOTOR_OUTPUT` or widen `ANGLE_DEADBAND`.
-- If the wheel runs away from the target, flip the polarity of the DAC outputs or the `ASx_CCW_POSITIVE` flags.
-
----
-
-## Known issues
-
-- `onDisconnect()` searches for an empty slot (`== nullptr`) instead of the disconnecting controller, so a disconnected gamepad is never removed from the list.
-- In `processGamepad()`, the deadband branch sets `t1`/`t2` to center but doesn't `return`, so the following `map()` calls overwrite it. Stick drift will cause slight torque output.
-- Gamepad input overrides the PID without a mode switch, and the PID keeps running underneath it.
-- `intialized1`/`intialized2` are always `true` (and misspelled), so there is no startup validation of sensor readings.
-- No fault handling: a lost or out-of-range sensor simply holds the last angle, and the controller keeps driving.
-- `AS1_CENTER` and `AS2_CENTER` are defined but not used, and the `freq1`/`freq2` values are computed but unused.
-- The 150 ms loop is slow for a steering loop; the main loop also blocks on `delay()`.
+The PID values have already been tuned, but might require retuning depending on the EPS Module. Accuracy remains high
+as long as the target angle is within +/- 360 Degrees, after which the angle tracking begins to loose accuracy.
 
 ---
