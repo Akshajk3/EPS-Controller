@@ -2,8 +2,6 @@
 
 ESP32 firmware that closes a position loop around a steering column. It reads two PWM-output absolute angle sensors, runs a PID controller toward a target angle, and drives a pair of complementary analog (DAC) signals that command the steering actuator. A Bluetooth gamepad can be used for manual control through [Bluepad32](https://github.com/ricardoquesada/bluepad32).
 
-> ⚠️ **Safety:** This code commands a physical steering actuator. Test with the wheels off the ground or the actuator unloaded, keep a hardware power cutoff within reach, and never run it on a vehicle on a public road. The firmware has no fault detection, watchdog, or sensor-plausibility checks (see [Known issues](#known-issues)).
-
 ---
 
 ## How it works
