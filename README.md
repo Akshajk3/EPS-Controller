@@ -135,7 +135,3 @@ The PID sample time is 150 ms (`SetSampleTime(150)`), matching the `delay(150)` 
 - The 150 ms loop is slow for a steering loop; the main loop also blocks on `delay()`.
 
 ---
-
-## License
-
-_Add a license here (e.g. MIT) before publishing._
