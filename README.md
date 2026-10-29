@@ -6,13 +6,6 @@ ESP32 firmware that closes a position loop around a steering column. It reads tw
 
 ## How it works
 
-```
- AS1 (PWM) ──┐                                     ┌── DAC1 (GPIO25) ──┐
-             ├─► angle unwrap ─► avg angle ─► PID ─┤                   ├─► actuator / EPS controller
- AS2 (PWM) ──┘                                     └── DAC2 (GPIO26) ──┘
-                                                          ▲
-                              Bluetooth gamepad (left stick X) overrides
-```
 <img width="3768" height="1064" alt="image" src="https://github.com/user-attachments/assets/a82af196-e729-4e8c-996b-e07277988ccc" />
 
 1. **Angle sensing.** Each sensor outputs a PWM signal whose duty cycle (10%–90%) encodes angle. Pin-change interrupts measure the high and low times of each pulse; the main loop converts them to duty cycle.
